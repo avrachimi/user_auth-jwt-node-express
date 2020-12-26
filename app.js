@@ -1,10 +1,10 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const dotenv = require('dotenv');
 
 const app = express();
 
-// Middleware
-
+dotenv.config();
 
 // Routes
 // GET
@@ -20,10 +20,11 @@ app.post('/api/login', (req, res) => {
     const user = {
         id: 1,
         username: 'smems',
-        email: 'smems@smems.smems'
+        email: 'smems@smems.com'
     }
 
-    jwt.sign({user}, 'secretKey', (err, token) => {
+    // Sign and send token
+    jwt.sign({user}, process.env.TOKEN_SECRET, {expiresIn: 10}, (err, token) => {
         res.json({
             token
         });
@@ -31,7 +32,7 @@ app.post('/api/login', (req, res) => {
 });
 
 app.post('/api/posts', verifyToken, (req, res) => {
-    jwt.verify(req.token, 'secretKey', (err, authData) => {
+    jwt.verify(req.token, process.env.TOKEN_SECRET, (err, authData) => {
         if (err) {
             res.sendStatus(403);
         }
@@ -44,18 +45,17 @@ app.post('/api/posts', verifyToken, (req, res) => {
     });
 });
 
+// Middleware
+
 // TOKEN FORMAT
 // Authorization: Bearer <access_token>
-
 function verifyToken(req, res, next) {
     // Get auth header value
     const bearerHeader = req.headers['authorization'];
 
     // Check if bearer is undefined
     if (typeof bearerHeader !== 'undefined') {
-
         const bearer = bearerHeader.split(' ');
-
         // Get token from array
         const bearerToken = bearer[1];
         // Set the token
