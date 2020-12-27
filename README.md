@@ -2,7 +2,7 @@
 
 Simple User Authentication API using Node, Express and JWT.
 
-This simple API was built for learning purposes.
+This simple API was built to learn more and get familiar with Node, Express, MongoDB.
 
 **work in progress...**
 
