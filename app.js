@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const bodyParser = require('body-parser');
 const monk = require('monk');
 const bcrypt = require('bcrypt');
+const Joi = require('joi');
 
 
 const app = express();
@@ -18,7 +19,7 @@ db.then(() => {
 const usersdb = db.get('users');
 usersdb.createIndex('username');
 
-const saltRounds = 10;
+const saltRounds = 10; // Used for hashing passwords
 
 // Middleware
 app.use(bodyParser.json());
@@ -68,14 +69,12 @@ app.get('/api/users', authenticateToken, (req, res) => {
             res.json({
                 users: docs
             });
-        })
+        }).catch((err) => {
+            res.json({
+                message: err
+            });
+        });
     }
-});
-
-app.get('/api/logout', (req, res) => {
-    res.json({
-        message: 'Logged out'
-    });
 });
 
 // POST
@@ -84,49 +83,55 @@ app.post('/api/login', async (req, res) => {
     const username = req.body.username;
     const password = req.body.password;
 
-    // Find if username exists in database. if not, show error
-    const user = await usersdb.findOne({username});
-    // Compare pass with hashed pass stored in db
-    bcrypt.compare(password, user.password, (err, result) => {
-        if (err) return res.json({message: err});
-        if (!result) return res.json({message: 'Username or Password incorrect.'});
+    try {
+        const user = await usersdb.findOne({ username });
+        // Find if username exists in database. if not, show error
+        if (user) {
+            // Compare pass with hashed pass stored in db
+            bcrypt.compare(password, user.password, (err, result) => {
+                if (err) return res.json({ message: err });
+                if (!result) return res.json({ message: 'Username or Password incorrect.' });
 
-        jwt.sign({user}, process.env.TOKEN_SECRET, {expiresIn: '1h'}, (err, token) => {
-            if (err) return res.json({message: err});
-            res.json({
-                token
+                jwt.sign({ user }, process.env.TOKEN_SECRET, { expiresIn: '1h' }, (err, token) => {
+                    if (err) return res.json({ message: err });
+                    res.json({ token });
+                });
             });
-        });
-    });
+        }
+        else { // Username wasn't found in database.
+            res.json({message: 'User not found. Make sure your username is spelled correctly.'}); // Maybe output 'Username or Password incorrect.' to prevent API users from figuring out if username or pass was the incorrect entry
+        }
+    } catch (err) {
+        res.json({ message: err });
+    }
 
 
 });
 
-app.post('/api/register', (req, res) => {
+app.post('/api/register', async (req, res) => {
     const {username, password} = req.body;
+    const user = await usersdb.findOne({username});
 
-    bcrypt.hash(password, saltRounds, function(err, hash) {
-        if (err) return res.json({message: err});
-        // Store hash in your password DB.
-        usersdb.insert({
-            username: username,
-            password: hash
-        }).then((docs) => {
-            res.json({
-                message: 'Register',
-                docs
-            });
-        }).catch((err) => {
-            res.sendStatus(500).json({message: err});
-        })
-    });
-});
-
-app.post('/api/posts', authenticateToken, (req, res) => {
-    res.json({
-        message: 'Post',
-        user: req.user
-    });
+    if (!user) {
+        bcrypt.hash(password, saltRounds, function(err, hash) {
+            if (err) return res.json({message: err});
+            // Store hash in your password DB.
+            usersdb.insert({
+                username: username,
+                password: hash
+            }).then((docs) => {
+                res.json({
+                    message: 'Register',
+                    docs
+                });
+            }).catch((err) => {
+                res.sendStatus(500).json({message: err});
+            })
+        });
+    }
+    else {
+        res.json({message: 'Username already exists in database.'});
+    }
 });
 
 
