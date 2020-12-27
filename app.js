@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
 const bodyParser = require('body-parser');
 const monk = require('monk');
+const bcrypt = require('bcrypt');
 
 
 const app = express();
@@ -17,7 +18,7 @@ db.then(() => {
 const usersdb = db.get('users');
 usersdb.createIndex('username');
 
-
+const saltRounds = 10;
 
 // Middleware
 app.use(bodyParser.json());
@@ -85,22 +86,18 @@ app.post('/api/login', async (req, res) => {
 
     // Find if username exists in database. if not, show error
     const user = await usersdb.findOne({username});
-    // Hash password
-    // Compare hashed pass with hashed pass stored in db
-    // if user exists and hashed passwords match; use user object to sign token
-    if (username === 'smems' && password === '123456') { // TODO: Change later. Integrate with mongoDB, use hashed passwords
+    // Compare pass with hashed pass stored in db
+    bcrypt.compare(password, user.password, (err, result) => {
+        if (err) return res.json({message: err});
+        if (!result) return res.json({message: 'Username or Password incorrect.'});
 
-        // Sign and send token
         jwt.sign({user}, process.env.TOKEN_SECRET, {expiresIn: '1h'}, (err, token) => {
+            if (err) return res.json({message: err});
             res.json({
                 token
             });
         });
-    } else {
-        res.json({
-            error: 'Username or Password incorrect.'
-        });
-    }
+    });
 
 
 });
@@ -108,17 +105,21 @@ app.post('/api/login', async (req, res) => {
 app.post('/api/register', (req, res) => {
     const {username, password} = req.body;
 
-    usersdb.insert({
-        username: username,
-        password: password
-    }).then((docs) => {
-        res.json({
-            message: 'Register',
-            docs
-        });
-    }).catch((err) => {
-        res.sendStatus(500).json({message: err});
-      })
+    bcrypt.hash(password, saltRounds, function(err, hash) {
+        if (err) return res.json({message: err});
+        // Store hash in your password DB.
+        usersdb.insert({
+            username: username,
+            password: hash
+        }).then((docs) => {
+            res.json({
+                message: 'Register',
+                docs
+            });
+        }).catch((err) => {
+            res.sendStatus(500).json({message: err});
+        })
+    });
 });
 
 app.post('/api/posts', authenticateToken, (req, res) => {
