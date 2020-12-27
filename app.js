@@ -2,29 +2,26 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
 const bodyParser = require('body-parser');
+const monk = require('monk');
+
 
 const app = express();
 
 dotenv.config();
 
-// Mock Users for testing
-const users = [
-    {
-        id: 1,
-        username: 'smems',
-        password: '123456'
-    },
-    {
-        id: 2,
-        username: 'admin',
-        password: 'admin'
-    },
-]
+const db = monk(process.env.MONGO_URI);
+db.then(() => {
+    console.log('Connected to mongodb server...')
+})
+
+const usersdb = db.get('users');
+usersdb.createIndex('username');
+
+
 
 // Middleware
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
-app.use('/api/users', authenticateToken);
 
 // TOKEN FORMAT
 // Authorization: Bearer <access_token>
@@ -37,7 +34,6 @@ function authenticateToken(req, res, next) {
         const bearer = bearerHeader.split(' ');
         const bearerToken = bearer[1]; // Get token from array
         req.token = bearerToken; // Set the token
-        next();
     }
     else {
         res.sendStatus(401); // Unauthorized
@@ -64,19 +60,36 @@ app.get('/api', (req, res) => {
 });
 
 app.get('/api/users', authenticateToken, (req, res) => {
+    const filter = req.body.filter;
+
+    if (filter === 'all') {
+        usersdb.find({}).then((docs) => {
+            res.json({
+                users: docs
+            });
+        })
+    }
+});
+
+app.get('/api/logout', (req, res) => {
     res.json({
-        users: users
+        message: 'Logged out'
     });
 });
 
 // POST
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
     // Get user data
     const username = req.body.username;
+    const password = req.body.password;
 
-    const user = users[0]; // Use mock user object for now
+    // Find if username exists in database. if not, show error
+    const user = await usersdb.findOne({username});
+    // Hash password
+    // Compare hashed pass with hashed pass stored in db
+    // if user exists and hashed passwords match; use user object to sign token
+    if (username === 'smems' && password === '123456') { // TODO: Change later. Integrate with mongoDB, use hashed passwords
 
-    if (user) {
         // Sign and send token
         jwt.sign({user}, process.env.TOKEN_SECRET, {expiresIn: '1h'}, (err, token) => {
             res.json({
@@ -92,8 +105,23 @@ app.post('/api/login', (req, res) => {
 
 });
 
+app.post('/api/register', (req, res) => {
+    const {username, password} = req.body;
+
+    usersdb.insert({
+        username: username,
+        password: password
+    }).then((docs) => {
+        res.json({
+            message: 'Register',
+            docs
+        });
+    }).catch((err) => {
+        res.sendStatus(500).json({message: err});
+      })
+});
+
 app.post('/api/posts', authenticateToken, (req, res) => {
-    console.log(req.user.username);
     res.json({
         message: 'Post',
         user: req.user
