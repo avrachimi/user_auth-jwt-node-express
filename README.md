@@ -1,6 +1,6 @@
 # jwt-node-express
 
-Simple User Authentication API using Node, Express and JWT.
+Simple User Authentication API using Node, Express and JsonWebToken.
 
 This simple API was built to learn more and get familiar with Node, Express, MongoDB.
 
